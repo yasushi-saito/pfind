@@ -12,10 +12,11 @@ import (
 )
 
 type pfinder struct {
-	pattern  string
-	resultCh chan string
-	reqWG    sync.WaitGroup
-	resultWG sync.WaitGroup
+	grepOutput bool
+	pattern    string
+	resultCh   chan string
+	reqWG      sync.WaitGroup
+	resultWG   sync.WaitGroup
 }
 
 func (p *pfinder) readDir(dir string) {
@@ -45,16 +46,21 @@ func (p *pfinder) readDir(dir string) {
 	}
 }
 
-func pfind(root, pattern string) {
+func pfind(root string, grepOutput bool, pattern string) {
 	p := &pfinder{
-		pattern:  pattern,
-		resultCh: make(chan string, 64),
+		grepOutput: grepOutput,
+		pattern:    pattern,
+		resultCh:   make(chan string, 64),
 	}
 	p.resultWG.Add(1)
 	go func() {
 		defer p.resultWG.Done()
 		for out := range p.resultCh {
-			fmt.Println(out)
+			if p.grepOutput {
+				fmt.Printf("%s:1:\n", out)
+			} else {
+				fmt.Println(out)
+			}
 		}
 	}()
 	p.reqWG.Add(1)
@@ -65,19 +71,22 @@ func pfind(root, pattern string) {
 }
 
 func main() {
-	var rootDir string
-	var rootCmd = &cobra.Command{
-		Use:   "pfind",
-		Short: "Parallel find",
-		Long:  "Parallel find",
-		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			log.Printf("Rootdir: %v args %v", rootDir, args)
-			pfind(rootDir, args[0])
-		},
-	}
+	var (
+		rootDir    string
+		grepOutput bool
+		rootCmd    = &cobra.Command{
+			Use:   "pfind",
+			Short: "Parallel find",
+			Long:  "Parallel find",
+			Args:  cobra.ExactArgs(1),
+			Run: func(cmd *cobra.Command, args []string) {
+				pfind(rootDir, grepOutput, args[0])
+			},
+		}
+	)
 
 	rootCmd.Flags().StringVarP(&rootDir, "dir", "d", ".", "Root directory")
+	rootCmd.Flags().BoolVarP(&grepOutput, "grepoutput", "n", false, "Append a dummy linenumber to each output")
 	if err := rootCmd.Execute(); err != nil {
 		log.Panicf("Exec: %v", err)
 	}
