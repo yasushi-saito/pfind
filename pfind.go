@@ -6,15 +6,21 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
 )
 
+type result struct {
+	path string
+	mode fs.FileMode
+}
+
 type pfinder struct {
 	grepOutput bool
 	pattern    string
-	resultCh   chan string
+	resultCh   chan result
 	reqWG      sync.WaitGroup
 	resultWG   sync.WaitGroup
 }
@@ -32,10 +38,10 @@ func (p *pfinder) readDir(dir string) {
 		if err != nil {
 			log.Fatalf("match %q: %v", p.pattern, err)
 		}
-		if matched {
-			p.resultCh <- dir + "/" + ent.Name()
-		}
 		mode := ent.Type()
+		if matched {
+			p.resultCh <- result{path: dir + "/" + ent.Name(), mode: mode}
+		}
 		if (mode & fs.ModeSymlink) != 0 {
 			continue
 		}
@@ -46,20 +52,31 @@ func (p *pfinder) readDir(dir string) {
 	}
 }
 
+func modeString(mode fs.FileMode) string {
+	var buf strings.Builder
+	if (mode & fs.ModeDir) != 0 {
+		buf.WriteRune('d')
+	}
+	if (mode & fs.ModeSymlink) != 0 {
+		buf.WriteRune('S')
+	}
+	return buf.String()
+}
+
 func pfind(root string, grepOutput bool, pattern string) {
 	p := &pfinder{
 		grepOutput: grepOutput,
 		pattern:    pattern,
-		resultCh:   make(chan string, 64),
+		resultCh:   make(chan result, 64),
 	}
 	p.resultWG.Add(1)
 	go func() {
 		defer p.resultWG.Done()
 		for out := range p.resultCh {
 			if p.grepOutput {
-				fmt.Printf("%s:1:\n", out)
+				fmt.Printf("%s:1: %s\n", out.path, modeString(out.mode))
 			} else {
-				fmt.Println(out)
+				fmt.Println(out.path)
 			}
 		}
 	}()
