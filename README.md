@@ -1,2 +1,13 @@
 # pfind
-Parallel find
+
+Parallel find.
+
+Usage: `pfind [-d ROOT] GLOB`
+
+`ROOT` defaults to the current directory (`.`).
+
+Example:
+
+```
+pfind -d ~ 'emacs*'
+```
